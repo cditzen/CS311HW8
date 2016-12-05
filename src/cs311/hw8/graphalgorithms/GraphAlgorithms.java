@@ -268,13 +268,17 @@ public class GraphAlgorithms
 
         /** Add the smallest edge to the MST up to |V| - 1 vertices,
          * as long as the edge doesn't connect two vertices in the same component */
-        while (kruskalMST.getEdges().size() < g.getVertices().size() - 1 && currentIndex < g.getEdges().size()) {
+        int graphNumVertices = g.getVertices().size();
+        int graphNumEdges = g.getEdges().size();
+        int kruskalNumEdges = 0;
+        while (kruskalNumEdges < graphNumVertices - 1 && currentIndex < graphNumEdges) {
             IGraph.Edge<E> edge = edges.get(currentIndex);
             Vertex v1 = g.getVertex(edge.getVertexName1());
             Vertex v2 = g.getVertex(edge.getVertexName2());
             if (!components.sameComponent(v1, v2)) {
                 components.mergeComponents(v1, v2);
                 kruskalMST.addEdge(edge.getVertexName1(), edge.getVertexName2(), edge.getEdgeData());
+                kruskalNumEdges++;
             }
             currentIndex++;
         }

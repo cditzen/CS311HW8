@@ -2,6 +2,7 @@ package cs311.hw8.OSM;
 
 import cs311.hw8.graph.IGraph;
 import cs311.hw8.graphalgorithms.GraphAlgorithms;
+import cs311.hw8.graphalgorithms.IWeight;
 import cs311.hw8.helpers.StreetData;
 import org.w3c.dom.*;
 import javax.xml.parsers.*;
@@ -11,25 +12,177 @@ import org.xml.sax.SAXException;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Scanner;
 
-import static cs311.hw8.graphalgorithms.GraphAlgorithms.ShortestPath;
 
 /**
  * Created by Cory Itzen on 11/27/2016.
  */
 public class OSMMap {
 
+    /****************************  Main Methods  ****************************/
+
+    /**
+     * Part 2 Main Method.
+     * Parses an input file containing the map file.
+     * Outputs the approximate total distance of all streets in the city.
+     *
+     * @param args
+     * @throws ParserConfigurationException
+     * @throws IOException
+     * @throws SAXException
+     */
+    public static void main(String[] args) throws ParserConfigurationException, IOException, SAXException {
+        if (args.length < 1) {
+            throw new IllegalArgumentException("Must have at least one argument: input map file name.");
+        }
+
+        String mapFileString = args[0];
+
+        OSMMap osmMap = new OSMMap();
+        osmMap.LoadMap(mapFileString);  // TODO Where should this file be stored?
+        double totalDistance = osmMap.TotalDistance();
+        int num = osmMap.osmMap.getEdges().size();
+        System.out.println("Total Distance: " + totalDistance);
+    }
+
+    /**
+     * Part 3 Main Method.
+     * Parses two input file containing locations; first is the map file, second is the locations to visit.
+     * Prints a list of street locations that are traveled to navigate the locations given in the input file.
+     *
+     * @param args
+     * @throws ParserConfigurationException
+     * @throws IOException
+     * @throws SAXException
+     */
+    public static void main3(String[] args) throws ParserConfigurationException, IOException, SAXException {
+        if (args.length < 2) {
+            throw new IllegalArgumentException("Must have two arguments: input map file name, input location file name.");
+        }
+
+        String mapFileString = args[0];
+        String locationFileString = args[1];
+
+        OSMMap osmMap = new OSMMap();
+        osmMap.LoadMap(mapFileString);
+
+        /** List of locations to visit */
+        ArrayList<Location> locations = new ArrayList<>();
+
+        /** Scan route.txt for locations */
+        File routeFile = new File(locationFileString);
+        Scanner scanner = new Scanner(routeFile);
+        while(scanner.hasNextLine()) {
+            String line = scanner.nextLine();
+            Scanner lineScanner = new Scanner(line);
+            double lat = Double.valueOf(lineScanner.next());
+            double lon = Double.valueOf(lineScanner.next());
+            locations.add(new Location(lat, lon));
+            lineScanner.close();
+        }
+        scanner.close();
+
+        /** List of vertex ids */
+        List<String> shortestPath = new ArrayList<>();
+
+        for (int i = 0; i < locations.size() - 1; i++) {
+            List<String> path = osmMap.ShortestRoute(locations.get(i), locations.get(i + 1));
+
+            /** Remove the last element to avoid duplicates */
+            if (shortestPath.size() > 0 && shortestPath.get(shortestPath.size() - 1).equals(path.get(0))) {
+                shortestPath.remove(shortestPath.size() - 1);
+            }
+            shortestPath.addAll(path);
+        }
+
+        List<String> streetRoute = osmMap.StreetRoute(shortestPath);
+
+        for (String street : streetRoute) {
+            System.out.println(street);
+        }
+    }
+
+    /**
+     * Part 4 main method
+     * Parses two input file containing locations; first is the map file, second is the locations to visit in the TSP
+     * Prints the vertex IDs of the appriximate TSP of the given locations.
+     * Also prints the "Pipe Dream" Weight Sum of the MST.
+     * @param args input text file
+     * @throws ParserConfigurationException
+     * @throws IOException
+     * @throws SAXException
+     */
+    public static void main4(String[] args) throws ParserConfigurationException, IOException, SAXException {
+        if (args.length < 2) {
+            throw new IllegalArgumentException("Must have two arguments: input map file name, input location file name.");
+        }
+
+        String mapFileString = args[0];
+        String locationFileString = args[1];
+
+        OSMMap osmMap = new OSMMap();
+        osmMap.LoadMap(mapFileString);
+
+        /** List of locations to visit */
+        ArrayList<Location> locations = new ArrayList<>();
+
+        /** Scan route.txt for locations */
+        File routeFile = new File(locationFileString);
+        Scanner scanner = new Scanner(routeFile);
+        while(scanner.hasNextLine()) {
+            String line = scanner.nextLine();
+            Scanner lineScanner = new Scanner(line);
+            double lat = Double.valueOf(lineScanner.next());
+            double lon = Double.valueOf(lineScanner.next());
+            locations.add(new Location(lat, lon));
+            lineScanner.close();
+        }
+        scanner.close();
+
+        /** List of vertex ids given in the input file */
+        ArrayList<String> vertices = new ArrayList<>();
+        for (Location location : locations) {
+            vertices.add(osmMap.ClosestRoad(location));
+        }
+
+        /** List of Vertex IDs of the approximate TSP tour of the given locations */
+        List<String> tsp = osmMap.ApproximateTSP(vertices);
+        for (String vertex : tsp) {
+            System.out.println("Vertex ID: " + vertex);
+        }
+
+        /** Output the MST of the graph */
+        PipeDream pipeDream = new PipeDream(osmMap);
+        System.out.println("Pipe Dream WeightSum: " + pipeDream.getMSTWeightSum() + " miles");
+    }
+
+    /****************************  Part 2  ****************************/
+
     Graph<Location, StreetData> osmMap;
 
+    /** Creates a new OSMMap that is directed */
     public OSMMap() {
         osmMap = new Graph<>();
         osmMap.setDirectedGraph();
     }
 
-    // TODO Clear old map
+    /**
+     * Fills the OSM Map with data from an input XML file.
+     *
+     * @param filename
+     * @throws ParserConfigurationException
+     * @throws IOException
+     * @throws SAXException
+     */
     public void LoadMap(String filename) throws ParserConfigurationException, IOException, SAXException {
+
+        // Clear existing map
+        osmMap = new Graph<>();
+        osmMap.setDirectedGraph();
+
         File input = new File(filename);
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         DocumentBuilder builder = factory.newDocumentBuilder();
@@ -125,21 +278,22 @@ public class OSMMap {
             distance += edges.get(i).getEdgeData().getDistance();
         }
         /** Convert meters to miles */
-        double metersPerMile = 1609.34;
-        distance = distance / metersPerMile;
+        distance = metersToMiles(distance);
 
         /** Because there are few one-way streets in Ames, total distance is approximated by dividing by two */
         return distance / 2;
     }
 
-    public static void main2(String[] args) throws ParserConfigurationException, IOException, SAXException {
-        OSMMap osmMap = new OSMMap();
-        osmMap.LoadMap("AmesMap.txt");  // TODO Where should this file be stored?
-        double totalDistance = osmMap.TotalDistance();
-        System.out.println("Total Distance: " + totalDistance);
+    /**
+     * Converts a distance given in meters to units of miles.
+     * @param meters distance to convert
+     * @return distance in miles
+     */
+    public double metersToMiles(double meters) {
+        return meters / 1609.34;
     }
 
-    /*******  Part 3  *******/
+    /****************************  Part 3  ****************************/
 
     private static class Location {
 
@@ -171,6 +325,8 @@ public class OSMMap {
                     * Math.sin(lonDistance / 2) * Math.sin(lonDistance / 2);
             Double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
             Double distance = R * c * 1000;
+
+            /** Ames is pretty flat so no need to account for elevation */
 
             return distance;
         }
@@ -206,7 +362,7 @@ public class OSMMap {
     }
 
     /**
-     * Returns list of vertex ids along the shortest route connecting two locations
+     * Returns list of vertex IDs that create the shortest route connecting two locations
      * @param fromLocation location to start from
      * @param toLocation location to end at
      * @return
@@ -227,6 +383,13 @@ public class OSMMap {
         return shortestPath;
     }
 
+    /**
+     * Creates a list of street names from a list of vertices to be traveled
+     * Removes duplicate street names
+     * @param route List of Vertex IDs. Vertices must be ordered in such a way that an edge exists between all
+     *              consecutive vertices in the list.
+     * @return
+     */
     public List<String> StreetRoute(List<String> route) {
 
         List<String> streetRoute = new ArrayList<>();
@@ -242,40 +405,84 @@ public class OSMMap {
         return streetRoute;
     }
 
-    public static void main(String[] args) throws ParserConfigurationException, IOException, SAXException {
-        OSMMap osmMap = new OSMMap();
-        osmMap.LoadMap("AmesMap.txt");
+    /****************************  Part 4  ****************************/
 
-        /** List of locations to visit */
-        ArrayList<Location> locations = new ArrayList<>();
+    /**
+     * Uses the Nearest Neighbor Algorithm to find an approximate tour.
+     * Nearest Neighbor is a Greedy algorithm that on average yields a tour 25% longer than the length of the optimal
+     * solution.
+     * The next node in the TSP is chosen by picking the vertex that is closest to the current location.
+     *
+     *  https://en.wikipedia.org/wiki/Travelling_salesman_problem#Constructive_heuristics
+     *
+     * @param vertices List of Strings containing vertex ids within the graph
+     *                  First location is the starting location
+     * @return
+     */
+    public List<String> ApproximateTSP(ArrayList<String> vertices) {
 
-        /** Scan route.txt for locations */
-        File routeFile = new File("route.txt");
-        Scanner scanner = new Scanner(routeFile);
-        while(scanner.hasNext()) {
-            double lat = Double.valueOf(scanner.next());
-            double lon = Double.valueOf(scanner.next());
-            locations.add(new Location(lat, lon));
+        if (vertices.size() < 1) {
+            return Collections.emptyList();
         }
-        scanner.close();
 
-        /** List of vertex ids */
-        List<String> shortestPath = new ArrayList<>();
+        /** List of vertices in the approximate TSP */
+        List<String> approximateTSP = new ArrayList<>();
 
-        for (int i = 0; i < locations.size() - 1; i++) {
-            List<String> path = osmMap.ShortestRoute(locations.get(i), locations.get(i + 1));
+        /** Initialize the first vertex as the starting location */
+        IGraph.Vertex<Location> currentVertex = osmMap.getVertex(vertices.get(0));
+        vertices.remove(0);
+        approximateTSP.add(currentVertex.getVertexName());
 
-            /** Remove the last element to avoid duplicates */
-            if (shortestPath.size() > 0) {
-                shortestPath.remove(shortestPath.size() - 1);
+        /** Iterate through all vertices, greedily adding them to the TSP */
+        while (vertices.size() > 0) {
+            int closestVertexIndex = 0;
+            Location currentLocation = new Location(currentVertex.getVertexData().getLatitude(), currentVertex.getVertexData().getLongitude());
+            double shortestDistance = Double.MAX_VALUE;
+
+            /** Search through all remaining vertices and find the vertex geographically closest to the current vertex*/
+            for (int i = 0; i < vertices.size(); i++) {
+                IGraph.Vertex<Location> nextVertex = osmMap.getVertex(vertices.get(i));
+                Location nextLocation = new Location(nextVertex.getVertexData().getLatitude(), nextVertex.getVertexData().getLongitude());
+                double distance = currentLocation.getDistance(nextLocation);
+                if (distance < shortestDistance) {
+                    closestVertexIndex = i;
+                    currentLocation = nextLocation;
+                    shortestDistance = distance;
+                }
             }
-            shortestPath.addAll(path);
+
+            /** Set the current vertex and add it to the TSP */
+            currentVertex = osmMap.getVertex(vertices.get(closestVertexIndex));
+            approximateTSP.add(vertices.get(closestVertexIndex));
+
+            /** Remove the current vertex from the remaining vertices to visit. */
+            vertices.remove(closestVertexIndex);
+        }
+        return approximateTSP;
+    }
+
+    /**
+     * Class that outputs the weight sum of the MST of the given OSMMap
+     */
+    private static class PipeDream {
+
+        OSMMap osmMap;
+
+        PipeDream(OSMMap graph) {
+            this.osmMap = graph;
         }
 
-        List<String> streetRoute = osmMap.StreetRoute(shortestPath);
-
-        for (String street : streetRoute) {
-            System.out.println(street);
+        /**
+         * Weight sum of the MST of the OSMMap
+         * @return
+         */
+        public double getMSTWeightSum() {
+            List<IGraph.Edge> mstEdges = GraphAlgorithms.Kruscal((Graph) osmMap.osmMap).getEdges();
+            double weightSum = 0.0;
+            for (IGraph.Edge<IWeight> edge : mstEdges) {
+                weightSum += edge.getEdgeData().getWeight();
+            }
+            return osmMap.metersToMiles(weightSum);
         }
     }
 }
