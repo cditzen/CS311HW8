@@ -399,6 +399,15 @@ public class GraphAlgorithms
         }
     }
 
+    /**
+     * Creates a shortest path list of Edges connecting two vertices by using Dijkrtra's algorithm.
+     * @param g Graph
+     * @param vertexStart Starting vertex
+     * @param vertexEnd Ending Vertex
+     * @param <V>
+     * @param <E>
+     * @return Shortest Path List of Edges connecting the two vertices.
+     */
     public static <V, E extends IWeight> List<IGraph.Edge<E>> ShortestPath(IGraph<V, E> g, String vertexStart, String vertexEnd) {
 
         /** Set of Open vertices */
@@ -415,7 +424,7 @@ public class GraphAlgorithms
         HashMap<Integer, Vertex<V>> predecessor = new HashMap<>();
         for (Vertex v : g.getVertices()) {
             distance.put(v.hashCode(), Double.POSITIVE_INFINITY);
-            predecessor.put(v.hashCode(), null); // TODO Is this even necessary?
+            predecessor.put(v.hashCode(), null);
         }
 
         /** Set distance of vertexStart to 0 */
@@ -461,7 +470,6 @@ public class GraphAlgorithms
                     }
 
                     /** Add neighbor to Open */
-                    //if (!Arrays.asList(open).contains(neighbor)) {
                     if (!openMap.containsKey(neighbor.hashCode())) {
                         open.add(neighbor);
                         openMap.put(neighbor.hashCode(), true);

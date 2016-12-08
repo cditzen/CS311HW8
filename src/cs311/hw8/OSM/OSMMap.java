@@ -34,7 +34,7 @@ public class OSMMap {
      * @throws IOException
      * @throws SAXException
      */
-    public static void main(String[] args) throws ParserConfigurationException, IOException, SAXException {
+    public static void main2(String[] args) throws ParserConfigurationException, IOException, SAXException {
         if (args.length < 1) {
             throw new IllegalArgumentException("Must have at least one argument: input map file name.");
         }
@@ -42,9 +42,8 @@ public class OSMMap {
         String mapFileString = args[0];
 
         OSMMap osmMap = new OSMMap();
-        osmMap.LoadMap(mapFileString);  // TODO Where should this file be stored?
+        osmMap.LoadMap(mapFileString);
         double totalDistance = osmMap.TotalDistance();
-        int num = osmMap.osmMap.getEdges().size();
         System.out.println("Total Distance: " + totalDistance);
     }
 
@@ -72,7 +71,7 @@ public class OSMMap {
         /** List of locations to visit */
         ArrayList<Location> locations = new ArrayList<>();
 
-        /** Scan route.txt for locations */
+        /** Scan route file for locations */
         File routeFile = new File(locationFileString);
         Scanner scanner = new Scanner(routeFile);
         while(scanner.hasNextLine()) {
@@ -129,7 +128,7 @@ public class OSMMap {
         /** List of locations to visit */
         ArrayList<Location> locations = new ArrayList<>();
 
-        /** Scan route.txt for locations */
+        /** Scan route file for locations */
         File routeFile = new File(locationFileString);
         Scanner scanner = new Scanner(routeFile);
         while(scanner.hasNextLine()) {
@@ -228,6 +227,7 @@ public class OSMMap {
                 refs.add(((Element) ndList.item(j)).getAttribute("ref"));
             }
 
+            /** Search for highways, and check if they are one-ways */
             String name = "";
             boolean isHighway = false;
             boolean isTwoway = true;
@@ -243,6 +243,7 @@ public class OSMMap {
                 }
             }
 
+            /** Add the edge to the osmMap */
             if (isHighway && !name.isEmpty()) {
                 for (int j = 0; j < refs.size(); j++) {
                     /** Check if there is a next ref available in the list */
@@ -255,13 +256,13 @@ public class OSMMap {
                         StreetData streetData = new StreetData(name, distance);
                         try {
                             osmMap.addEdge(v1, v2, streetData);
-                        } catch(IGraph.DuplicateEdgeException e) {
+                        } catch (IGraph.DuplicateEdgeException e) {
                             System.out.println("Edge already exists: " + v1 + ", " + v2);
                         }
                         if (isTwoway) {
                             try {
                                 osmMap.addEdge(v2, v1, streetData);
-                            } catch(IGraph.DuplicateEdgeException e) {
+                            } catch (IGraph.DuplicateEdgeException e) {
                                 System.out.println("Edge already exists: " + v2 + ", " + v1);
                             }
                         }
@@ -271,6 +272,10 @@ public class OSMMap {
         }
     }
 
+    /**
+     * Returns an approximate total distance of all edges in a map in miles.
+     * @return approximate distance in miles
+     */
     public double TotalDistance() {
         List<IGraph.Edge<StreetData>> edges = osmMap.getEdges();
         double distance = 0.0;
@@ -326,7 +331,7 @@ public class OSMMap {
             Double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
             Double distance = R * c * 1000;
 
-            /** Ames is pretty flat so no need to account for elevation */
+            /** Ames is pretty flat, so no need to account for elevation */
 
             return distance;
         }
@@ -412,6 +417,7 @@ public class OSMMap {
      * Nearest Neighbor is a Greedy algorithm that on average yields a tour 25% longer than the length of the optimal
      * solution.
      * The next node in the TSP is chosen by picking the vertex that is closest to the current location.
+     * The starting node is added at the end of the algorithm to ensure that it is a tour.
      *
      *  https://en.wikipedia.org/wiki/Travelling_salesman_problem#Constructive_heuristics
      *
@@ -458,31 +464,12 @@ public class OSMMap {
             /** Remove the current vertex from the remaining vertices to visit. */
             vertices.remove(closestVertexIndex);
         }
+
+        /** Return to the starting vertex */
+        if (approximateTSP.size() > 1) {
+            approximateTSP.add(approximateTSP.get(0));
+        }
+
         return approximateTSP;
-    }
-
-    /**
-     * Class that outputs the weight sum of the MST of the given OSMMap
-     */
-    private static class PipeDream {
-
-        OSMMap osmMap;
-
-        PipeDream(OSMMap graph) {
-            this.osmMap = graph;
-        }
-
-        /**
-         * Weight sum of the MST of the OSMMap
-         * @return
-         */
-        public double getMSTWeightSum() {
-            List<IGraph.Edge> mstEdges = GraphAlgorithms.Kruscal((Graph) osmMap.osmMap).getEdges();
-            double weightSum = 0.0;
-            for (IGraph.Edge<IWeight> edge : mstEdges) {
-                weightSum += edge.getEdgeData().getWeight();
-            }
-            return osmMap.metersToMiles(weightSum);
-        }
     }
 }
